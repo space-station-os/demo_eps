@@ -8,6 +8,10 @@ def generate_launch_description():
        'config',
        'battery_config.yaml'
     )
+   bcdu_config = os.path.join(get_package_share_directory('demo_eps'),
+       'config',
+       'bcdu_config.yaml'
+    )
    battery_manager = Node(
         package='demo_eps',
         executable='battery_manager_node',
@@ -16,8 +20,16 @@ def generate_launch_description():
         parameters=[battery_config],
         emulate_tty=True
     )
-   
+   bcdu=Node(
+       package='demo_eps',
+       executable='bcdu_node',
+       name='bcdu_node',
+       output='screen',
+       parameters=[bcdu_config],
+       emulate_tty=True
+   )
+
    return LaunchDescription([
         battery_manager,
-
+    #    bcdu
     ])

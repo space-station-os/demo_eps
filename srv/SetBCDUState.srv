@@ -1,0 +1,4 @@
+string desired_mode  # "idle" | "charge" | "discharge" | "safe"
+---
+bool accepted
+string message

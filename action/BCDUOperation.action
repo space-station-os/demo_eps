@@ -1,0 +1,12 @@
+
+# Goal
+float64 target_voltage
+string operation_type  # "charge" or "discharge"
+---
+# Result
+bool success
+string message
+---
+# Feedback
+float64 current_voltage
+string status  # "idle","charging","discharging","fault","safe"

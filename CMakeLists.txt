@@ -16,32 +16,48 @@ find_package(visualization_msgs REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(yaml-cpp REQUIRED)
+find_package(behaviortree_cpp_v3 REQUIRED)
 
-# set(msg_files
-  
-#   )
+set(msg_files
+  "action/BCDUOperation.action"
+  "msg/BCDUStatus.msg"
+  "srv/SetBCDUState.srv"
+)
 
-# rosidl_generate_interfaces(${PROJECT_NAME}
-#     ${msg_files}
-#     DEPENDENCIES std_msgs sensor_msgs visualization_msgs
-#   )
+rosidl_generate_interfaces(${PROJECT_NAME}
+  ${msg_files} 
+  DEPENDENCIES  std_msgs sensor_msgs visualization_msgs
+)
+
+ament_export_dependencies(rosidl_default_runtime)
 
 
 include_directories(include)
 
 add_executable(battery_manager_node src/battery_health.cpp)
-
+rosidl_target_interfaces(battery_manager_node ${PROJECT_NAME} "rosidl_typesupport_cpp")
 ament_target_dependencies(battery_manager_node
   rclcpp
   std_srvs
   sensor_msgs
   diagnostic_msgs
+  behaviortree_cpp_v3
 )
 
 target_link_libraries(battery_manager_node yaml-cpp)
 
+
+add_executable(bcdu_node src/bcdu_device.cpp)
+rosidl_target_interfaces(bcdu_node ${PROJECT_NAME} "rosidl_typesupport_cpp")
+ament_target_dependencies(bcdu_node
+  rclcpp rclcpp_action
+  std_msgs sensor_msgs diagnostic_msgs 
+  rosidl_default_runtime
+)
+
 install(TARGETS
   battery_manager_node
+  bcdu_node
   DESTINATION lib/${PROJECT_NAME})
 
 install(DIRECTORY launch/
@@ -51,6 +67,11 @@ install(DIRECTORY launch/
 install(DIRECTORY config/
   DESTINATION share/${PROJECT_NAME}/config
 )
+
+install(DIRECTORY behavior_trees/
+  DESTINATION share/${PROJECT_NAME}/behavior_trees
+)
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights

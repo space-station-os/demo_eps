@@ -1,0 +1,30 @@
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+
+    <Fallback name="EPS_Controller">
+
+      <!-- Priority 1: Fault detected -->
+      <Sequence name="HandleFault">
+        <BatteryFaultDetected/>
+        <EnterSafeMode/>
+      </Sequence>
+
+      <!-- Priority 2: Try charging -->
+      <Sequence name="TryCharge">
+        <EvaluateChargeCondition/>
+        <SendBCDUCharge/>
+      </Sequence>
+
+      <!-- Priority 3: Try discharging -->
+      <Sequence name="TryDischarge">
+        <EvaluateDischargeCondition/>
+        <SendBCDUDischarge/>
+      </Sequence>
+
+      <!-- Priority 4: Default idle -->
+      <IdleNode/>
+
+    </Fallback>
+
+  </BehaviorTree>
+</root>

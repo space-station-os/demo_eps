@@ -1,6 +1,5 @@
 
 # Goal
-float64 target_voltage
 string operation_type  # "charge" or "discharge"
 ---
 # Result

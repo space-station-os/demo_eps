@@ -26,14 +26,18 @@ public:
 public:
   struct BatteryUnit
   {
-    std::string id;                                // battery_bms_<i>
-    std::string location;                          // e.g., channel_1
-    float voltage = BATTERY_MAX_VOLTAGE;           // starting at full charge
-    bool discharging = false;                      // discharging state
+    std::string id;
+    float voltage;
+    bool discharging;
+    std::string location;
+    std::shared_ptr<rclcpp::Publisher<sensor_msgs::msg::BatteryState>> publisher;
+    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr discharge_service;
+    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr charge_service;
 
-    rclcpp::Publisher<sensor_msgs::msg::BatteryState>::SharedPtr publisher;
-    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr service;
+    // Add this line:
+    std::string prev_state = "idle";
   };
+
 
   int num_channels_;
   std::vector<BatteryUnit> batteries_;
@@ -41,7 +45,7 @@ public:
   rclcpp::TimerBase::SharedPtr publish_timer_;
   rclcpp::TimerBase::SharedPtr bt_tick_timer_;
   rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticStatus>::SharedPtr diag_pub_;
-
+  rclcpp::TimerBase::SharedPtr log_timer_;
   std::unordered_map<std::string, std::shared_ptr<BatteryUnit>> battery_lookup;
 
   // Behavior Tree

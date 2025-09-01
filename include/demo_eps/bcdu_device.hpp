@@ -5,6 +5,8 @@
 #include <std_msgs/msg/float64.hpp>
 #include <sensor_msgs/msg/battery_state.hpp>
 #include <diagnostic_msgs/msg/diagnostic_status.hpp>
+#include <std_srvs/srv/trigger.hpp>  // <-- REQUIRED
+
 #include "demo_eps/action/bcdu_operation.hpp"
 #include "demo_eps/msg/bcdu_status.hpp"
 #include "demo_eps/srv/set_bcdu_state.hpp"
@@ -27,10 +29,10 @@ private:
   // Action server
   rclcpp_action::Server<BcduOperation>::SharedPtr action_server_;
   rclcpp_action::GoalResponse handle_goal(
-      const rclcpp_action::GoalUUID &,
-      std::shared_ptr<const BcduOperation::Goal> goal);
+    const rclcpp_action::GoalUUID &,
+    std::shared_ptr<const BcduOperation::Goal> goal);
   rclcpp_action::CancelResponse handle_cancel(
-      const std::shared_ptr<GoalHandle> goal_handle);
+    const std::shared_ptr<GoalHandle> goal_handle);
   void handle_accepted(const std::shared_ptr<GoalHandle> goal_handle);
   void execute(const std::shared_ptr<GoalHandle> goal_handle);
 
@@ -40,16 +42,22 @@ private:
   rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticStatus>::SharedPtr diag_pub_;
   rclcpp::Service<demo_eps::srv::SetBCDUState>::SharedPtr mode_srv_;
 
-  // Battery state tracking (id = battery_bms_<int>)
-  struct BatteryStateSnapshot {
-    double voltage;
-    bool discharging;
+  // Charge/discharge clients for each battery ORU
+  std::unordered_map<int, rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr> charge_clients_;
+  std::unordered_map<int, rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr> discharge_clients_;
+
+  // Battery state tracking
+  struct BatteryStateSnapshot
+  {
+    double voltage = 0.0;
+    bool discharging = false;
     rclcpp::Time last_update;
   };
+
   std::unordered_map<int, rclcpp::Subscription<sensor_msgs::msg::BatteryState>::SharedPtr> battery_subs_;
   std::unordered_map<int, BatteryStateSnapshot> battery_state_;
 
-  // Internal State
+  // Internal state
   std::mutex mtx_;
   double bus_voltage_{0.0};
   double regulation_voltage_{120.0};
@@ -59,7 +67,7 @@ private:
   std::string fault_msg_;
 
   // Parameters
-  double max_discharge_current_A_{127.0};
+  double max_discharge_current_A_{127.0};  // Fault Isolator (FI) limit
   double max_charge_current_A_{65.0};
   double regulation_min_V_{130.0};
   double regulation_max_V_{150.0};
@@ -75,7 +83,7 @@ private:
     const std::shared_ptr<demo_eps::srv::SetBCDUState::Request> req,
     std::shared_ptr<demo_eps::srv::SetBCDUState::Response> res);
 
-  // Helpers
+  // Helper methods
   void publishStatus(const std::string &mode, bool fault, const std::string &fault_msg);
   void publishDiag(uint8_t level, const std::string &name, const std::string &msg);
 };

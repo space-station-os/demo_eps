@@ -28,7 +28,7 @@ def generate_launch_description():
        parameters=[bcdu_config],
        emulate_tty=True
    )
-
+    
    return LaunchDescription([
         battery_manager,
     #    bcdu

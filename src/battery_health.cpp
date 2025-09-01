@@ -1,14 +1,10 @@
 #include "demo_eps/battery_health.hpp"
 
-
-
 using std::placeholders::_1;
 using std::placeholders::_2;
 using namespace BT;
 
-
 std::map<std::string, BatteryManager::BatteryUnit*> battery_lookup;
-
 
 class PriorityDischarge: public SyncActionNode{
   public:
@@ -19,7 +15,6 @@ class PriorityDischarge: public SyncActionNode{
       return {InputPort<std::string>("channel")};
     }
 
-   
     NodeStatus tick() override {
     auto channel = getInput<std::string>("channel").value();
     int index = std::stoi(channel.substr(channel.find("_") + 1));
@@ -32,7 +27,6 @@ class PriorityDischarge: public SyncActionNode{
     auto* b1 = battery_lookup[b1_id];
     auto* b2 = battery_lookup[b2_id];
 
-    // Case 1: already discharging and voltage okay
     if (b1 && b1->discharging && b1->voltage > 50.0f) {
       RCLCPP_INFO(rclcpp::get_logger("BT"), "[BT] Continuing discharge on %s", b1->id.c_str());
       return NodeStatus::SUCCESS;
@@ -42,7 +36,6 @@ class PriorityDischarge: public SyncActionNode{
       return NodeStatus::SUCCESS;
     }
 
-    // Case 2: healthy and idle → start discharging
     if (b1 && b1->voltage > 50.0f && !b1->discharging) {
       b1->discharging = true;
       RCLCPP_INFO(rclcpp::get_logger("BT"), "[BT] Discharging %s", b1->id.c_str());
@@ -54,14 +47,10 @@ class PriorityDischarge: public SyncActionNode{
       return NodeStatus::SUCCESS;
     }
 
-    // Case 3: both batteries exist but below threshold → fail
     RCLCPP_ERROR(rclcpp::get_logger("BT"), "[BT] %s: Both batteries unhealthy or insufficient for discharge.", channel.c_str());
     return NodeStatus::FAILURE;
   }
-
-
 };
-
 
 class EnterSafeMode: public SyncActionNode{
   public:
@@ -69,15 +58,13 @@ class EnterSafeMode: public SyncActionNode{
     :SyncActionNode(name,config){}
 
     static PortsList providedPorts()
-    { return {};}
+    { return {};} 
 
     NodeStatus tick() override{
       RCLCPP_ERROR(rclcpp::get_logger("BT"),"[BT] All channels Failed.Entering Low power mode");
       return NodeStatus::SUCCESS;
     }
-
 };
-
 
 BatteryManager::BatteryManager()
 : Node("battery_manager_node")
@@ -103,8 +90,8 @@ BatteryManager::BatteryManager()
     unit->id = "battery_bms_" + std::to_string(i);
     unit->voltage = BATTERY_MAX_VOLTAGE;
     unit->discharging = false;
+    unit->prev_state = "idle";
 
-    
     if (config[unit->id]) {
       unit->location = config[unit->id].as<std::string>();
     } else {
@@ -114,7 +101,7 @@ BatteryManager::BatteryManager()
     unit->publisher = this->create_publisher<sensor_msgs::msg::BatteryState>(
       "/battery/" + unit->id + "/health", 10);
 
-    unit->service = this->create_service<std_srvs::srv::Trigger>(
+    unit->discharge_service = this->create_service<std_srvs::srv::Trigger>(
       "/battery/" + unit->id + "/discharge",
       [this, unit](const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
                   std::shared_ptr<std_srvs::srv::Trigger::Response> response)
@@ -123,6 +110,27 @@ BatteryManager::BatteryManager()
         unit->discharging = true;
         response->success = true;
         response->message = "Battery " + unit->id + " is discharging.";
+
+        if (!bt_triggered_) {
+          bt_triggered_ = true;
+          RCLCPP_INFO(this->get_logger(), "[BT] Starting periodic Behavior Tree tick...");
+          bt_tick_timer_ = this->create_wall_timer(
+            std::chrono::seconds(3),
+            [this]() {
+              tree_.tickRoot();
+            });
+        }
+      });
+
+    unit->charge_service = this->create_service<std_srvs::srv::Trigger>(
+      "/battery/" + unit->id + "/charge",
+      [this, unit](const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+                  std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+      {
+        RCLCPP_INFO(this->get_logger(), "Charge request received for %s", unit->id.c_str());
+        unit->discharging = false;
+        response->success = true;
+        response->message = "Battery " + unit->id + " is charging.";
 
         if (!bt_triggered_) {
           bt_triggered_ = true;
@@ -153,8 +161,14 @@ BatteryManager::BatteryManager()
         update_and_publish(std::make_shared<BatteryUnit>(unit));
     });
 
-  
-
+  log_timer_ = this->create_wall_timer(
+    std::chrono::seconds(5),
+    [this]() {
+      RCLCPP_INFO(this->get_logger(), "Battery voltages:");
+      for (const auto& unit : batteries_) {
+        RCLCPP_INFO(this->get_logger(), "  %s: %.2f V", unit.id.c_str(), unit.voltage);
+      }
+    });
 }
 
 void BatteryManager::update_and_publish(const std::shared_ptr<BatteryUnit>& unit)
@@ -164,9 +178,15 @@ void BatteryManager::update_and_publish(const std::shared_ptr<BatteryUnit>& unit
   float warning_voltage = BATTERY_WARNING_VOLTAGE;
   float critical_voltage = BATTERY_CRITICAL_VOLTAGE;
 
+  std::string new_state = unit->discharging ? "discharging" : "charging";
+  if (unit->prev_state != new_state) {
+    RCLCPP_INFO(this->get_logger(), "%s is now %s", unit->id.c_str(), new_state.c_str());
+    unit->prev_state = new_state;
+  }
+
   if (unit->discharging)
   {
-    unit->voltage -= 0.5;
+    unit->voltage -= 1.5;
     if (unit->voltage <= min_voltage)
     {
       unit->voltage = min_voltage;
@@ -176,7 +196,7 @@ void BatteryManager::update_and_publish(const std::shared_ptr<BatteryUnit>& unit
   }
   else
   {
-    unit->voltage += 0.3;
+    unit->voltage += 1.5;
     if (unit->voltage > max_voltage)
       unit->voltage = max_voltage;
   }

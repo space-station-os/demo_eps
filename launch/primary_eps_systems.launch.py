@@ -31,5 +31,5 @@ def generate_launch_description():
     
    return LaunchDescription([
         battery_manager,
-    #    bcdu
+        bcdu
     ])

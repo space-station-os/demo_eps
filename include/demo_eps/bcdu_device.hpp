@@ -56,6 +56,7 @@ private:
   rclcpp::Publisher<demo_eps::msg::BCDUStatus>::SharedPtr status_pub_;
   rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticStatus>::SharedPtr diag_pub_;
   rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr mbsu_voltage_pub_;
+  std::unordered_map<int, rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr> channel_voltage_pubs_;
 
   // State tracking
   double ssu_voltage_{0.0};

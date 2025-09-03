@@ -48,7 +48,11 @@ BcduNode::BcduNode(const rclcpp::NodeOptions &options)
 
   status_pub_      = this->create_publisher<demo_eps::msg::BCDUStatus>("/bcdu/status", 10);
   diag_pub_        = this->create_publisher<diagnostic_msgs::msg::DiagnosticStatus>("/eps/diagnostics", 10);
-  mbsu_voltage_pub_= this->create_publisher<std_msgs::msg::Float64>("/mbsu/input_voltage", 10);
+  for (int ch = 0; ch < num_channels_; ++ch) {
+      std::string topic = "/mbsu/channel_" + std::to_string(ch) + "/voltage";
+      channel_voltage_pubs_[ch] = this->create_publisher<std_msgs::msg::Float64>(topic, 10);
+    }
+
 
   RCLCPP_INFO(this->get_logger(), "BCDU Device READY..");
 }
@@ -118,10 +122,13 @@ void BcduNode::enterDischarge()
 
 void BcduNode::publishToMbsu(double volts)
 {
-  std_msgs::msg::Float64 v;
-  v.data = volts;
-  mbsu_voltage_pub_->publish(v);
+  for (const auto& [channel_id, pub] : channel_voltage_pubs_) {
+    std_msgs::msg::Float64 v;
+    v.data = volts;
+    pub->publish(v);
+  }
 }
+
 
 void BcduNode::publishDiag(uint8_t level, const std::string &name, const std::string &msg)
 {

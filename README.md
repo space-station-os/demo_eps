@@ -1,110 +1,133 @@
-# Space Station Electrical Power Systems
 
-**Electrical Power Systems (EPS) Simulation for Space Station OS**
+#  Primary Electrical Power System (EPS) – Space Station OS
 
-This ROS 2 package simulates the electrical power subsystem onboard a space station, focusing on real-time monitoring of battery health and readiness for power distribution.
+## Overview
 
----
+The Electrical Power System (EPS) is responsible for collecting, managing, and distributing power across the space station. It mimics the real ISS power architecture, including solar tracking, battery charge/discharge regulation, fault protection, and dynamic routing of power to downstream systems.
 
-## Features
+The primary components implemented include:
 
-The current version includes:
-
-- **Battery health status simulation** for 24 ORUs (Orbital Replacement Units), i.e., 2 batteries per channel across 12 EPS channels.
-- Each battery has:
-  - A unique `battery_bms_<ID>` identifier.
-  - A dedicated publisher for health status (`sensor_msgs/BatteryState`).
-  - A service server (`std_srvs/Trigger`) for discharge requests (used by BCDU and MBSU).
-- Battery **location mapping** (e.g., `channel_1`, `channel_2`, ...) is done via a YAML config file.
-- **Per-battery diagnostics** published on `/eps/diagnostics` when operating outside expected voltage range.
+* **SARJ (Solar Alpha Rotary Joint)**
+* **Battery Manager**
+* **BCDU (Battery Charge/Discharge Unit)**
+* **MBSU (Main Bus Switching Unit)**
+* **DDCU (Direct Current-to-Direct Current Converter Unit)**
 
 ---
 
-## Published Topics
+##  1. SARJ – Solar Array Tracking
 
-Each battery publishes its health to a dedicated topic:
-
-```
-
-/battery/battery\_bms\_<ID>/health
-
-```
-
-Example topics:
-
-```
-
-/battery/battery\_bms\_0/health
-/battery/battery\_bms\_1/health
-...
-/battery/battery\_bms\_23/health
-/eps/diagnostics
-
-````
+* The SARJ node (`sarj_mock.cpp`) simulates rotation of the solar arrays to track the sun.
+* It outputs a **solar voltage estimate** (`/solar/voltage`) that depends on the beta angle and sun position.
+* This voltage serves as input to the **BCDU** to decide whether to charge batteries or switch to discharge mode (e.g., during eclipse).
 
 ---
 
-## Battery Status Message
+##  2. Battery Manager
 
-The topic messages conform to the standard [`sensor_msgs/BatteryState`](https://github.com/ros2/common_interfaces/blob/humble/sensor_msgs/msg/BatteryState.msg) and include fields like:
+* Each channel (1–12) has **two ORUs** (Orbital Replacement Units), each with a `BatteryManagementSystem` (BMS).
+* The `battery_health.cpp` node:
 
-```yaml
-header:
-  frame_id: battery_bms_18
-voltage: 120.0
-current: 4.0
-charge: 100.0
-capacity: 100.0
-percentage: 1.0
-power_supply_status: 1         # Charging
-power_supply_health: 1         # Good
-power_supply_technology: 2     # Li-Ion
-present: true
-cell_voltage: [38 values]
-cell_temperature: [38 values]
-location: channel_10
-serial_number: battery_bms_18
-````
-
-Values are updated every second and include:
-
-* Realistic simulation of 38-cell voltage and temperature profiles
-* Charging/discharging state changes based on service requests
+  * Publishes per-ORU `sensor_msgs/BatteryState` on `/battery/battery_bms_<ID>/health`.
+  * Responds to `/charge` and `/discharge` service calls (simulated trigger-based).
+  * Applies voltage drop/gain based on activity.
+  * Rejects unsafe commands based on voltage limits (e.g., over 120 V or under 70 V).
 
 ---
 
-## Parameters
+##  3. BCDU – Charge/Discharge Controller
 
-This node uses the following parameters:
+* Implemented as a **ROS 2 action server** in `bcdu_device.cpp`.
+* Listens to:
 
-```yaml
-/battery_manager_node:
-  ros__parameters:
-    num_channels: 12
-    battery_config: "config/battery_config.yaml"
+  * Action goals on `/bcdu/operation` (charge or discharge with target voltage).
+  * `/solar/voltage` topic to determine when to switch between charge/discharge.
+  * Battery status from all 24 BMS instances.
+* Parallelizes charge/discharge commands to all healthy ORUs via `/battery/battery_bms_X/charge` and `/discharge`.
+* Publishes status to `/bcdu/status` and diagnostics to `/eps/diagnostics`.
+
+Key features:
+
+* Fault isolation if current > 127 A or voltage outside safe range.
+* Automatic **safe mode entry** on fault detection.
+
+---
+
+##  4. MBSU – Channel Selection and Routing
+
+* Implemented in `mbsu_distributor.cpp`.
+* Subscribes to:
+
+  * `/mbsu/channel_<N>/voltage` — one per EPS channel (voltage derived from BCDU-dispatched ORUs).
+* Maintains a live mapping of channel voltages.
+* Periodically calls `selectHealthyChannels()`:
+
+  * Picks top 2 healthy channels (voltage > 120 V).
+  * Publishes **combined voltage average** to `/ddcu/input_voltage` (simulating DDCU supply).
+  * Publishes warning diagnostics if fewer than 2 healthy channels available.
+
+> Note: MBSU does **not** subscribe to BMS health directly anymore — it only relies on **channel voltage** published by BCDU.
+
+---
+
+##  System Flow
+
 ```
-
-Example YAML mapping for battery locations:
-
-```yaml
-battery_bms_0: channel_1
-battery_bms_1: channel_1
-...
-battery_bms_23: channel_12
+           [SARJ]
+             │
+     +───────▼────────+
+     │   Solar Power  │
+     │    Estimate    │
+     +───────┬────────+
+             │ /solar/voltage
+         [BCDU Action Server]
+         /bcdu/operation
+        ┌────────┬────────┐
+        │        │        │
+    /charge  /discharge  Monitor all ORUs
+        │        │
+ ┌──────▼──┐ ┌────▼────┐
+ │ Battery │ │ Battery │  ...
+ │  BMS 0  │ │  BMS 1  │  etc.
+ └─────────┘ └─────────┘
+      │              │
+  /health         /health
+      ▼              ▼
+[MBSU Node]
+ └─ Subscribes to:
+      /mbsu/channel_<N>/voltage
+ └─ Publishes:
+      /ddcu/input_voltage (to DDCU)
+ └─ Health selection:
+      choose top 2 channels
 ```
 
 ---
 
-## Future Work
+##  Diagnostics and Fault Handling
 
-* Diagnostic failure modes (e.g., low voltage, overheat, dead battery) will be added in future versions.
-* Integration with the **Battery Charge/Discharge Unit (BCDU)** and **Main Bus Switching Unit (MBSU)**.
-* Aggregated per-channel monitoring and EPS fault reporting.
+* Each node publishes to `/eps/diagnostics` using `diagnostic_msgs/DiagnosticStatus`.
+* Faults include:
+
+  * BCDU overcurrent/undervoltage.
+  * Battery overcharge/undervoltage.
+  * MBSU channel selection failure.
+
+These diagnostics can be monitored in real-time by system status nodes or GUIs.
 
 ---
 
+##  Usage Notes
 
-**Maintainer**: Siddarth Dayasagar
-**License**: \[Apache 2.0 or your choice]
+* Channels are configurable via ROS 2 parameters (`num_channels`).
+* Simulation parameters (voltage thresholds, current limits) are hardcoded but can be made dynamic.
+* Nodes should be launched in the following order for full EPS simulation:
 
-```
+  ```bash
+  ros2 run demo_eps sarj_mock
+  ros2 run demo_eps battery_health
+  ros2 run demo_eps bcdu_device
+  ros2 run demo_eps mbsu_device
+  ```
+
+

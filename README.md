@@ -131,3 +131,4 @@ These diagnostics can be monitored in real-time by system status nodes or GUIs.
   ```
 
 
+<img width="548" height="328" alt="Image" src="https://github.com/user-attachments/assets/804fb5b8-a6a4-4db1-9c3a-d8741a5b4dac" />

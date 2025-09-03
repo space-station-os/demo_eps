@@ -1,0 +1,25 @@
+/eps_power_controller:
+  ros__parameter:
+    charge_threshold: 165.0
+    discharge_threshold: 140.0 
+
+
+/mock_solar_controller:
+  ros__parameter: 
+    orbit_period_s: 90.0                # Orbit period (in minutes)
+    eclipse_duration_s: 35.0            # Duration of eclipse phase in orbit
+    ramp_window_s: 8.0                  # Ramp up/down window for solar array transitions
+    p_max_kw: 84.0                      # Max solar power output (ISS-class)
+    derate_with_beta_cosine: true      # Apply cosine derating with beta angle
+
+    temp_ambient_c: 20.0                # Ambient thermal temperature (°C)
+    temp_per_kw_c: 0.4                  # Temperature rise per kW of solar load
+    temp_time_constant_s: 20.0          # Time constant for temperature change
+
+    beta_max_deg: 75.0                  # Max beta angle for sun visibility
+    beta_lock_limit_deg: 72.0           # Lock limit for solar gimbal control
+    beta_precession_orbits: 10          # Number of orbits for beta precession planning
+
+    ssu_v_setpoint_v: 160.0             # SSU setpoint voltage (V)
+    ssu_v_ripple_v: 0.6                 # Ripple voltage (V)
+    ssu_efficiency: 0.985               # Solar Switching Unit efficiency

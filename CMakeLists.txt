@@ -7,9 +7,82 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-# uncomment the following section in order to fill in
-# further dependencies manually.
-# find_package(<dependency> REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+find_package(std_srvs REQUIRED)
+find_package(actionlib_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(diagnostic_msgs REQUIRED)
+find_package(rclcpp_action REQUIRED)
+find_package(yaml-cpp REQUIRED)
+find_package(behaviortree_cpp_v3 REQUIRED)
+
+set(msg_files
+  "msg/BCDUStatus.msg"
+ 
+)
+
+rosidl_generate_interfaces(${PROJECT_NAME}
+  ${msg_files} 
+  DEPENDENCIES  std_msgs sensor_msgs visualization_msgs
+)
+
+ament_export_dependencies(rosidl_default_runtime)
+
+
+include_directories(include)
+
+add_executable(battery_manager_node src/battery_health.cpp)
+rosidl_target_interfaces(battery_manager_node ${PROJECT_NAME} "rosidl_typesupport_cpp")
+ament_target_dependencies(battery_manager_node
+  rclcpp
+  std_srvs
+  sensor_msgs
+  diagnostic_msgs
+ 
+)
+
+target_link_libraries(battery_manager_node yaml-cpp)
+
+
+add_executable(bcdu_node src/bcdu_device.cpp)
+rosidl_target_interfaces(bcdu_node ${PROJECT_NAME} "rosidl_typesupport_cpp")
+ament_target_dependencies(bcdu_node
+  rclcpp 
+  std_msgs sensor_msgs diagnostic_msgs std_srvs
+
+)
+
+add_executable(mbsu_device src/mbsu_distributor.cpp)
+ament_target_dependencies(mbsu_device
+  rclcpp 
+  std_msgs sensor_msgs diagnostic_msgs std_srvs
+
+)
+
+add_executable(solar_power src/sarj_mock.cpp)
+ament_target_dependencies(solar_power
+rclcpp std_msgs sensor_msgs diagnostic_msgs)
+ 
+install(TARGETS
+  battery_manager_node
+  bcdu_node
+  mbsu_device
+  solar_power
+  DESTINATION lib/${PROJECT_NAME})
+
+install(DIRECTORY launch/
+  DESTINATION share/${PROJECT_NAME}/launch
+)
+
+install(DIRECTORY config/
+  DESTINATION share/${PROJECT_NAME}/config
+)
+
+install(DIRECTORY behavior_trees/
+  DESTINATION share/${PROJECT_NAME}/behavior_trees
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

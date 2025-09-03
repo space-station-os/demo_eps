@@ -55,10 +55,10 @@ ament_target_dependencies(bcdu_node
   rosidl_default_runtime
 )
 
-add_executable(eps_power_controller src/eps_power_controller.cpp) 
-rosidl_target_interfaces(eps_power_controller ${PROJECT_NAME} "rosidl_typesupport_cpp")
-ament_target_dependencies(eps_power_controller
-  rclcpp rclcpp_action std_msgs sensor_msgs diagnostic_msgs rosidl_default_runtime   behaviortree_cpp_v3)
+# add_executable(eps_power_controller src/eps_power_controller.cpp) 
+# rosidl_target_interfaces(eps_power_controller ${PROJECT_NAME} "rosidl_typesupport_cpp")
+# ament_target_dependencies(eps_power_controller
+#   rclcpp rclcpp_action std_msgs sensor_msgs diagnostic_msgs rosidl_default_runtime   behaviortree_cpp_v3)
 
 add_executable(solar_power src/sarj_mock.cpp)
 ament_target_dependencies(solar_power
@@ -67,7 +67,7 @@ rclcpp std_msgs sensor_msgs diagnostic_msgs)
 install(TARGETS
   battery_manager_node
   bcdu_node
-  eps_power_controller
+  # eps_power_controller
   solar_power
   DESTINATION lib/${PROJECT_NAME})
 

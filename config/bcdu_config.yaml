@@ -7,11 +7,12 @@ bcdu_node:
     # Regulation voltage range
     regulation_min_V: 130.0
     regulation_max_V: 180.0
-    regulation_voltage: 150.0           # Nominal setpoint
+    regulation_voltage: 150.0           # Nominal setpoint to MBSU during discharge
 
-    # Bus voltage thresholds
-    bus_low_threshold_V: 140.0          # Below this, discharge is needed
-    bus_high_threshold_V: 165.0         # Above this, charge can be initiated
+    # SSU hysteresis thresholds (replace old bus_* thresholds)
+    ssu_charge_enter_v: 160.0           # Enter charge when SSU >= this
+    ssu_discharge_enter_v: 152.0        # Enter discharge when SSU <= this
+    ssu_nominal_v: 160.0                # Feed MBSU this voltage during charge
 
     # Battery topology
     num_channels: 12

@@ -31,7 +31,6 @@ BatteryManager::BatteryManager() : Node("battery_manager_node")
     unit->id = "battery_bms_" + std::to_string(i);
     unit->voltage = BATTERY_MAX_VOLTAGE;
     unit->discharging = false;
-    unit->prev_state = "idle";
     unit->location = config[unit->id] ? config[unit->id].as<std::string>() : "unknown";
 
     unit->publisher = this->create_publisher<sensor_msgs::msg::BatteryState>(
@@ -39,101 +38,90 @@ BatteryManager::BatteryManager() : Node("battery_manager_node")
 
     unit->discharge_service = this->create_service<std_srvs::srv::Trigger>(
       "/battery/" + unit->id + "/discharge",
-      [this, unit](const std::shared_ptr<std_srvs::srv::Trigger::Request>,
-                  std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+      [this, unit](const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+                   std::shared_ptr<std_srvs::srv::Trigger::Response> response)
       {
-        if (unit->voltage <= 70.0f) {
-          response->success = false;
-          response->message = "Voltage too low for discharge.";
-          return;
-        }
-        unit->discharging = true;
-        simulate_discharge(unit);
-        response->success = true;
-        response->message = "Battery " + unit->id + " is discharging.";
+        handle_discharge_request(unit, request, response);
       });
 
     unit->charge_service = this->create_service<std_srvs::srv::Trigger>(
       "/battery/" + unit->id + "/charge",
-      [this, unit](const std::shared_ptr<std_srvs::srv::Trigger::Request>,
-                  std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+      [this, unit](const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+                   std::shared_ptr<std_srvs::srv::Trigger::Response> response)
       {
-        if (unit->voltage >= 120.0f) {
-          response->success = false;
-          response->message = "Battery already sufficiently charged.";
-          return;
-        }
-        unit->discharging = false;
-        simulate_charge(unit);
-        response->success = true;
-        response->message = "Battery " + unit->id + " is charging.";
+        handle_charge_request(unit, request, response);
       });
 
-    batteries_.push_back(*unit);
+    batteries_.push_back(unit);
   }
 
-  publish_timer_ = this->create_wall_timer(
+  // Simulate charging/discharging every second
+  sim_timer_ = this->create_wall_timer(
     std::chrono::seconds(1),
     [this]() {
-      for (auto& unit : batteries_)
-        publish_battery_state(std::make_shared<BatteryUnit>(unit));
+      for (auto &unit : batteries_) {
+        simulate_unit(unit);
+        publish_battery_state(unit);
+      }
     });
 }
-void BatteryManager::simulate_discharge(std::shared_ptr<BatteryUnit> unit)
+
+void BatteryManager::simulate_unit(std::shared_ptr<BatteryUnit> unit)
 {
-  RCLCPP_INFO(this->get_logger(), "Discharging %s", unit->id.c_str());
-
-  unit->voltage -= 1.5;
-  if (unit->voltage <= 70.0f) {
-    unit->voltage = 70.0f;
-    unit->discharging = false;
-    diagnostic_msgs::msg::DiagnosticStatus diag;
-    diag.name = unit->id;
-    diag.level = diag.ERROR;
-    diag.message = "Voltage dropped below 70V. Stopping discharge.";
-    diag.hardware_id = unit->location;
-    diag_pub_->publish(diag);
+  if (unit->discharging) {
+    unit->voltage -= 1.5;
+    if (unit->voltage <= BATTERY_CRITICAL_VOLTAGE) {
+      unit->voltage = BATTERY_CRITICAL_VOLTAGE;
+      unit->discharging = false;
+      diagnostic_msgs::msg::DiagnosticStatus diag;
+      diag.name = unit->id;
+      diag.level = diag.ERROR;
+      diag.message = "Voltage dropped below 70V. Stopping discharge.";
+      diag.hardware_id = unit->location;
+      diag_pub_->publish(diag);
+    }
+  } else {
+    unit->voltage += 1.5;
+    if (unit->voltage > BATTERY_MAX_VOLTAGE)
+      unit->voltage = BATTERY_MAX_VOLTAGE;
   }
 
-  // Log battery voltages every 10s using RCLCPP_INFO_THROTTLE
-  static std::unordered_map<std::string, rclcpp::Time> last_log_time;
-  auto now = this->now();
-
-  if ((now - last_log_time[unit->id]).seconds() > 10.0) {
-    RCLCPP_INFO(this->get_logger(),
-                "[THROTTLED] %s voltage: %.2f V (%s)",
-                unit->id.c_str(),
-                unit->voltage,
-                unit->discharging ? "discharging" : "charging");
-    last_log_time[unit->id] = now;
-  }
-  static std::unordered_map<std::string, rclcpp::Time> last_log_time;
-  auto now = this->now();
-
-  if ((now - last_log_time[unit->id]).seconds() > 10.0) {
-    RCLCPP_INFO(this->get_logger(),
-                "[THROTTLED] %s voltage: %.2f V (%s)",
-                unit->id.c_str(),
-                unit->voltage,
-                unit->discharging ? "discharging" : "charging");
-    last_log_time[unit->id] = now;
-  }
-}
-
-
-void BatteryManager::simulate_charge(std::shared_ptr<BatteryUnit> unit)
-{ 
-  unit->voltage += 1.5;
-  if (unit->voltage > BATTERY_MAX_VOLTAGE)
-    unit->voltage = BATTERY_MAX_VOLTAGE;
-
-  // Log charging status every 10 seconds per battery
   RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 10000,
-    "[THROTTLE] %s voltage: %.2f V (charging)",
+    "%s voltage: %.2f V (%s)",
     unit->id.c_str(),
-    unit->voltage);
+    unit->voltage,
+    unit->discharging ? "discharging" : "charging");
 }
 
+void BatteryManager::handle_discharge_request(
+  std::shared_ptr<BatteryUnit> unit,
+  const std::shared_ptr<std_srvs::srv::Trigger::Request>,
+  std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+{
+  if (unit->voltage <= BATTERY_CRITICAL_VOLTAGE) {
+    response->success = false;
+    response->message = "Voltage too low for discharge.";
+    return;
+  }
+  unit->discharging = true;
+  response->success = true;
+  response->message = "Battery " + unit->id + " is now discharging.";
+}
+
+void BatteryManager::handle_charge_request(
+  std::shared_ptr<BatteryUnit> unit,
+  const std::shared_ptr<std_srvs::srv::Trigger::Request>,
+  std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+{
+  if (unit->voltage >= BATTERY_MAX_VOLTAGE) {
+    response->success = false;
+    response->message = "Battery already sufficiently charged.";
+    return;
+  }
+  unit->discharging = false;
+  response->success = true;
+  response->message = "Battery " + unit->id + " is now charging.";
+}
 
 void BatteryManager::publish_battery_state(const std::shared_ptr<BatteryUnit>& unit)
 {

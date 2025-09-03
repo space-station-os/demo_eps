@@ -32,15 +32,36 @@ public:
   };
 
   int num_channels_;
-  std::vector<BatteryUnit> batteries_;
+  int total_orus_;
+  std::vector<std::shared_ptr<BatteryUnit>> batteries_;  
 
   rclcpp::TimerBase::SharedPtr publish_timer_;
+  rclcpp::TimerBase::SharedPtr sim_timer_;  
   rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticStatus>::SharedPtr diag_pub_;
 
+  // Simulation methods
   void simulate_discharge(std::shared_ptr<BatteryUnit> unit);
   void simulate_charge(std::shared_ptr<BatteryUnit> unit);
+  void simulate_unit(std::shared_ptr<BatteryUnit> unit);  
+
+  // ROS Publishing
   void publish_battery_state(const std::shared_ptr<BatteryUnit>& unit);
 
+  // ROS Service Handlers
+  void handle_discharge_request(
+    std::shared_ptr<BatteryUnit> unit,
+    const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+
+  void handle_charge_request(
+    std::shared_ptr<BatteryUnit> unit,
+    const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+
+  // Helpers
+  void update_voltage_and_log(std::shared_ptr<BatteryUnit> unit, double delta, const std::string &mode);
+
+  // Constants
   static constexpr float BATTERY_MAX_VOLTAGE = 120.0f;
   static constexpr float BATTERY_MIN_VOLTAGE = 80.0f;
   static constexpr float BATTERY_WARNING_VOLTAGE = 60.0f;

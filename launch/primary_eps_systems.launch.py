@@ -28,8 +28,17 @@ def generate_launch_description():
        parameters=[bcdu_config],
        emulate_tty=True
    )
+   
+   ddcu= Node(
+       package='demo_eps',
+       executable='ddcu_device',
+       name="ddcu_node",
+       output='screen',
+       emulate_tty=True
+   )
     
    return LaunchDescription([
         battery_manager,
-        bcdu
+        bcdu,
+        ddcu
     ])

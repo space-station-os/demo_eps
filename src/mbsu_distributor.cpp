@@ -65,6 +65,8 @@ std::pair<int, int> MbsuNode::selectHealthyChannels()
   msg.data = combined_voltage;
   ddcu_pub_->publish(msg);
 
+  
+
   RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
     "Publishing combined voltage %.2f V from channels %d and %d",
     combined_voltage, healthy[0].first, healthy[1].first);

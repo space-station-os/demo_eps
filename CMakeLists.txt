@@ -16,7 +16,7 @@ find_package(visualization_msgs REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(yaml-cpp REQUIRED)
-
+find_package(space_station_thermal_control REQUIRED)
 
 set(msg_files
   "msg/BCDUStatus.msg"
@@ -63,7 +63,8 @@ ament_target_dependencies(mbsu_device
 
 add_executable(ddcu_device src/ddcu_device.cpp)
 ament_target_dependencies(ddcu_device
-rclcpp std_msgs sensor_msgs diagnostic_msgs)
+rclcpp std_msgs sensor_msgs diagnostic_msgs space_station_thermal_control)
+
 add_executable(solar_power src/sarj_mock.cpp)
 ament_target_dependencies(solar_power
 rclcpp std_msgs sensor_msgs diagnostic_msgs)

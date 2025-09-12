@@ -103,7 +103,7 @@ void DdcuNode::callInternalCooling(double heat_j)
                        ddcu_temperature_, heat_j);
 
   if (ddcu_temperature_ > 40.0){
-    RCLCPP_DEBUG(this->get_logger(), "[COOLING] Temperature low: %.2f °C, skipping.", ddcu_temperature_);
+    RCLCPP_DEBUG(this->get_logger(), "[COOLING] Temperature high: %.2f °C, activating cooling.", ddcu_temperature_);
  
   
     Coolant::Goal goal;

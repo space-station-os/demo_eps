@@ -63,11 +63,21 @@ ament_target_dependencies(mbsu_device
 
 add_executable(ddcu_device src/ddcu_device.cpp)
 ament_target_dependencies(ddcu_device
-rclcpp std_msgs sensor_msgs diagnostic_msgs rclcpp_action space_station_thermal_control)
+  rclcpp
+  std_msgs
+  sensor_msgs
+  diagnostic_msgs
+  rclcpp_action
+  space_station_thermal_control
+)
 
 add_executable(solar_power src/sarj_mock.cpp)
 ament_target_dependencies(solar_power
-rclcpp std_msgs sensor_msgs diagnostic_msgs)
+  rclcpp
+  std_msgs
+  sensor_msgs
+  diagnostic_msgs
+)
  
 install(TARGETS
   battery_manager_node

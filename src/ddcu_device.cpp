@@ -94,47 +94,57 @@ void DdcuNode::callInternalCooling(double heat_j)
   if (!coolant_client_->wait_for_action_server(std::chrono::seconds(1))) {
     RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
                          "[COOLING] Coolant action server not available.");
+        
     return;
   }
 
-  Coolant::Goal goal;
-  goal.input_temperature_c = ddcu_temperature_;   // send current temp as cooling request
-  goal.component_id = "ddcu_" + ddcu_type_;
+  RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 10000,
+                       "[DDCU] Temperature=%.2f°C, Heat=%.2f J",
+                       ddcu_temperature_, heat_j);
 
-  RCLCPP_INFO(this->get_logger(),
-              "[COOLING] Sending goal to coolant server: temp=%.2f °C, heat=%.2f J",
-              ddcu_temperature_, heat_j);
+  if (ddcu_temperature_ > 40.0){
+    RCLCPP_DEBUG(this->get_logger(), "[COOLING] Temperature low: %.2f °C, skipping.", ddcu_temperature_);
+ 
+  
+    Coolant::Goal goal;
+    goal.input_temperature_c = ddcu_temperature_;   // send current temp as cooling request
+    goal.component_id = "ddcu_" + ddcu_type_;
 
-  auto send_goal_options = rclcpp_action::Client<Coolant>::SendGoalOptions();
+    RCLCPP_INFO(this->get_logger(),
+                "[COOLING] Sending goal to coolant server: temp=%.2f °C, heat=%.2f J",
+                ddcu_temperature_, heat_j);
 
-  send_goal_options.feedback_callback =
-    [this](GoalHandleCoolant::SharedPtr,
-           const std::shared_ptr<const Coolant::Feedback> feedback) {
-      RCLCPP_INFO(this->get_logger(),
-                  "[COOLING][Feedback] Internal=%.2f°C | Ammonia=%.2f°C | Vented=%.2f kJ",
-                  feedback->internal_temp_c, feedback->ammonia_temp_c, feedback->vented_heat_kj);
+    auto send_goal_options = rclcpp_action::Client<Coolant>::SendGoalOptions();
 
-      // Update local DDCU temperature with feedback from coolant loop
-      ddcu_temperature_ = feedback->internal_temp_c;
-
-      // Publish updated temperature
-      std_msgs::msg::Float64 temp_msg;
-      temp_msg.data = ddcu_temperature_;
-      temperature_pub_->publish(temp_msg);
-    };
-
-  send_goal_options.result_callback =
-    [this](const GoalHandleCoolant::WrappedResult &result) {
-      if (result.code == rclcpp_action::ResultCode::SUCCEEDED) {
+    send_goal_options.feedback_callback =
+      [this](GoalHandleCoolant::SharedPtr,
+            const std::shared_ptr<const Coolant::Feedback> feedback) {
         RCLCPP_INFO(this->get_logger(),
-                    "[COOLING] Goal succeeded: %s", result.result->message.c_str());
-      } else {
-        RCLCPP_WARN(this->get_logger(),
-                    "[COOLING] Goal failed or canceled.");
-      }
-    };
+                    "[COOLING][Feedback] Internal=%.2f°C | Ammonia=%.2f°C | Vented=%.2f kJ",
+                    feedback->internal_temp_c, feedback->ammonia_temp_c, feedback->vented_heat_kj);
 
-  coolant_client_->async_send_goal(goal, send_goal_options);
+        // Update local DDCU temperature with feedback from coolant loop
+        ddcu_temperature_ = feedback->internal_temp_c;
+
+        // Publish updated temperature
+        std_msgs::msg::Float64 temp_msg;
+        temp_msg.data = ddcu_temperature_;
+        temperature_pub_->publish(temp_msg);
+      };
+
+    send_goal_options.result_callback =
+      [this](const GoalHandleCoolant::WrappedResult &result) {
+        if (result.code == rclcpp_action::ResultCode::SUCCEEDED) {
+          RCLCPP_INFO(this->get_logger(),
+                      "[COOLING] Goal succeeded: %s", result.result->message.c_str());
+        } else {
+          RCLCPP_WARN(this->get_logger(),
+                      "[COOLING] Goal failed or canceled.");
+        }
+      };
+
+    coolant_client_->async_send_goal(goal, send_goal_options);
+  }
 }
 
 void DdcuNode::publishDiagnostics(double input_voltage, double output_voltage)

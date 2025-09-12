@@ -78,10 +78,10 @@ std::pair<int, int> MbsuNode::selectHealthyChannels()
         age = (now - it->second).seconds();
       }
 
-        diagnostic_msgs::msg::KeyValue kv;
-        kv.key = key;
-        kv.value = age < CHANNEL_TIMEOUT_SEC ? "OK" : "STALE";
-        diag.values.push_back(kv);
+      diagnostic_msgs::msg::KeyValue kv;
+      kv.key = key;
+      kv.value = age < CHANNEL_TIMEOUT_SEC ? "OK" : "STALE";
+      diag.values.push_back(kv);
 
     }
 
